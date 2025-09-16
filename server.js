@@ -4,33 +4,42 @@ const bodyParser = require("body-parser");
 const app = express();
 app.use(bodyParser.json());
 
-// استقبل بيانات AppSheet
+// رسالة ترحيب على المسار /
+app.get("/", (req, res) => {
+  res.send("Server is running! Ready to receive AppSheet Webhooks at /print");
+});
+
+// استقبل بيانات AppSheet على /print
 app.post("/print", (req, res) => {
   const data = req.body;
 
   console.log("Received Data:", data);
 
-  // تصميم الفاتورة
+  // تصميم الفاتورة بالشكل نفسه الموجود في الشيت
   const receipt = `
- Parking Daily Closure
- ---------------------
- Date: ${data.date}
- Shift: ${data.shift}
- ---------------------
- Cars: ${data.cars}
- Total Cash: ${data.cash} SAR
- Total Mada: ${data.mada} SAR
- ---------------------
- Total Revenue: ${data.total} SAR
- ---------------------
- Thank You!
+--------------------------------
+        الاقفالية اليومية
+      (مواقف السيارات - Parking)
+--------------------------------
+التاريخ: ${data.date}
+الفـــتـــرة: ${data.shift}
+--------------------------------
+عدد السيارات: ${data.cars} سيارة
+اجمالي الكاش: ${data.cash} ريال
+اجمالي الشبكة: ${data.mada} ريال
+صافي الايراد الكلي: ${data.total} ريال
+--------------------------------
+       شكراً لاستخدامكم
+--------------------------------
 `;
 
+  // نطبع الفاتورة في Console (لاحقاً يمكن الإرسال للطابعة)
   console.log(receipt);
 
-  res.status(200).send({ success: true });
+  // نرسل تأكيد استلام البيانات
+  res.status(200).send({ success: true, message: "Receipt generated successfully" });
 });
 
-// السيرفر يعمل على المنفذ الافتراضي Render
+// تشغيل السيرفر على المنفذ الافتراضي Render
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
