@@ -1,45 +1,53 @@
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
-
+const fetch = require("node-fetch"); // لقراءة رابط Google Sheet بصيغة CSV
 const app = express();
 
-// مسار ملف CSV داخل المشروع
-const CSV_FILE = path.join(__dirname, "الاقفالية_اليومية.csv");
+// رابط Google Sheet بصيغة CSV (الورقة "الاقفالية اليومية")
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQNj3Zf0Kkq4d7gXkL6pSBl7yV0QXYZ123/pub?gid=1751567397&single=true&output=csv";
 
-app.get("/print", (req, res) => {
+// دالة لتحويل CSV إلى مصفوفة من الصفوف
+async function getSheetData() {
+  const response = await fetch(SHEET_CSV_URL);
+  const text = await response.text();
+  const rows = text.split("\n").map(row => row.split(","));
+  return rows;
+}
+
+// مسار عرض الاقفالية اليومية
+app.get("/print", async (req, res) => {
   try {
-    const data = fs.readFileSync(CSV_FILE, "utf8");
-    const rows = data.split("\n").map(row => row.split(","));
+    const rows = await getSheetData();
 
-    if (!rows || rows.length < 2) {
-      return res.send("لا توجد بيانات في ورقة الاقفالية اليومية.");
-    }
+    // نفترض الصفوف 2 وما بعد (الصف الأول هو العناوين)
+    const lastRow = rows[rows.length - 1];
 
-    const header = rows[0]; // الصف الأول: العناوين
-    const firstRow = rows[1]; // الصف الثاني: أول بيانات
+    const التاريخ = lastRow[1];  // عمود B
+    const الفترة = lastRow[2];   // عمود C
+    const عدد_السيارات = lastRow[3]; // عمود D
+    const الكاش = lastRow[4];    // عمود E
+    const الشبكة = lastRow[5];   // عمود F
+    const الصافي = lastRow[6];   // عمود G
 
     const receipt = `
 --------------------------------
         الاقفالية اليومية
       (مواقف السيارات - Parking)
 --------------------------------
-التاريخ: ${firstRow[0]}
-الفترة: ${firstRow[1]}
-عدد السيارات: ${firstRow[2]}
-اجمالي الكاش: ${firstRow[3]}
-اجمالي الشبكة: ${firstRow[4]}
-صافي الايراد الكلي: ${firstRow[5]}
+التاريخ: ${التاريخ}
+الفترة: ${الفترة}
+عدد السيارات: ${عدد_السيارات}
+اجمالي الكاش: ${الكاش}
+اجمالي الشبكة: ${الشبكة}
+صافي الايراد الكلي: ${الصافي}
 --------------------------------
        شكراً لاستخدامكم
 --------------------------------
 `;
 
     res.send(`<pre>${receipt}</pre>`);
-
   } catch (err) {
     console.error(err);
-    res.status(500).send("حدث خطأ أثناء قراءة ملف الاقفالية اليومية.");
+    res.status(500).send("حدث خطأ أثناء قراءة ورقة الاقفالية اليومية.");
   }
 });
 
