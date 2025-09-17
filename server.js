@@ -1,70 +1,66 @@
-// server.js
-const express = require("express");
-const { google } = require("googleapis");
-const fs = require("fs");
+const express = require('express');
+const bodyParser = require('body-parser');
+const fetch = require('node-fetch');
+const csv = require('csv-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(bodyParser.json());
 
-// مسار ملف credentials من Google Cloud
-const CREDENTIALS_PATH = "./credentials.json";
-const SPREADSHEET_ID = "1ZaG0fDw96Q7CBTcYQdC6zKJ8PI3987SauTbJevikejM";
-const SHEET_NAME = "الاقفالية اليومية";
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQYOUR_SHEET_ID/pub?output=csv'; // ضع رابط CSV العام هنا
 
-// تحميل بيانات الـ credentials
-const auth = new google.auth.GoogleAuth({
-  keyFile: CREDENTIALS_PATH,
-  scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-});
-
-// دالة لجلب البيانات من Google Sheet
+// دالة لتحويل CSV إلى JSON
 async function getSheetData() {
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: "v4", auth: client });
+  const response = await fetch(SHEET_CSV_URL);
+  const text = await response.text();
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: SHEET_NAME,
+  return new Promise((resolve, reject) => {
+    const results = [];
+    const stream = require('stream');
+    const readable = new stream.Readable();
+    readable._read = () => {};
+    readable.push(text);
+    readable.push(null);
+
+    readable
+      .pipe(csv())
+      .on('data', (data) => results.push(data))
+      .on('end', () => resolve(results))
+      .on('error', (err) => reject(err));
   });
-
-  return res.data.values; // ترجع المصفوفة
 }
 
-// تحويل بيانات الصفوف إلى نص منسق
-function formatSheetData(values) {
-  let output = "--------------------------------\n";
-  output += "        الاقفالية اليومية\n";
-  output += "      (مواقف السيارات - Parking)\n";
-  output += "--------------------------------\n";
-
-  // افترض الصف الأول هو العناوين
-  const headers = values[0];
-  const rows = values.slice(1);
-
-  rows.forEach((row) => {
-    headers.forEach((header, index) => {
-      output += `${header}: ${row[index] || ""}\n`;
-    });
-    output += "--------------------------------\n";
-  });
-
-  output += "       شكراً لاستخدامكم\n";
-  output += "--------------------------------\n";
-  return output;
-}
-
-// endpoint
-app.get("/print", async (req, res) => {
+// endpoint لطباعة ورقة الاقفالية اليومية
+app.get('/print', async (req, res) => {
   try {
-    const values = await getSheetData();
-    const receipt = formatSheetData(values);
-    res.send(`<pre>${receipt}</pre>`);
+    const data = await getSheetData();
+
+    // نحدد آخر صف لليوم
+    const todayEntry = data[data.length - 1];
+
+    const receipt = `
+--------------------------------
+        الاقفالية اليومية
+      (مواقف السيارات - Parking)
+--------------------------------
+التاريخ: ${todayEntry['التاريخ']}
+الفترة: ${todayEntry['الفترة']}
+عدد السيارات: ${todayEntry['عدد السيارات']}
+اجمالي الكاش: ${todayEntry['الكاش']}
+اجمالي الشبكة: ${todayEntry['الشبكة']}
+الصافي الكلي: ${todayEntry['الصافي الكلي']}
+--------------------------------
+       شكراً لاستخدامكم
+--------------------------------
+`;
+
+    res.send(`<pre>${receipt}</pre>`); // يظهر المنسق في المتصفح
   } catch (err) {
+    res.status(500).send('حدث خطأ أثناء قراءة بيانات الاقفالية اليومية.');
     console.error(err);
-    res.status(500).send("حدث خطأ أثناء قراءة ملف الاقفالية اليومية.");
   }
 });
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
